@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TasKiro — Gerenciador de Tarefas</title>
+
+  <!-- Tailwind CSS via Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+              400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+              800: '#3730a3', 900: '#312e81',
+            },
+          },
+          keyframes: {
+            'fade-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            'scale-in': { '0%': { opacity: '0', transform: 'scale(.96) translateY(8px)' }, '100%': { opacity: '1', transform: 'scale(1) translateY(0)' } },
+            'slide-in': { '0%': { opacity: '0', transform: 'translateX(24px)' }, '100%': { opacity: '1', transform: 'translateX(0)' } },
+          },
+          animation: {
+            'fade-in': 'fade-in .15s ease-out',
+            'scale-in': 'scale-in .18s cubic-bezier(.16,1,.3,1)',
+            'slide-in': 'slide-in .25s cubic-bezier(.16,1,.3,1)',
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Lucide icons via CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ---- Hiding rule: must beat any class-based `display` ----
+       Any element with the [hidden] attribute is fully removed from layout,
+       cannot be painted, and cannot intercept pointer events. */
+    [hidden] {
+      display: none !important;
+      pointer-events: none !important;
+      visibility: hidden !important;
+    }
+
+    html { scroll-behavior: smooth; }
+    body { font-feature-settings: "cv11", "ss01"; }
+
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; border: 2px solid transparent; background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; background-clip: padding-box; }
+    .dark ::-webkit-scrollbar-thumb { background: #475569; background-clip: padding-box; }
+
+    /* Drag & drop feedback */
+    .task-card.dragging { opacity: .4; }
+    .column-dropzone.drag-over { outline: 2px dashed #6366f1; outline-offset: -6px; background-color: rgba(99,102,241,.06); }
+
+    .checkbox-done { animation: pop .25s ease; }
+    @keyframes pop { 50% { transform: scale(1.25); } }
+  </style>
+</head>
+
+<body class="h-full bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans antialiased">
+
+  <!-- ============================ SIDEBAR ============================ -->
+  <aside id="sidebar"
+    class="fixed inset-y-0 left-0 z-40 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-out">
+
+    <!-- Brand -->
+    <div class="flex items-center gap-3 px-5 h-16 border-b border-slate-200 dark:border-slate-800 shrink-0">
+      <img src="https://kiro.dev/images/community/events/thumbnails/meetup2.svg" alt="TasKiro" class="h-9 w-9 rounded-lg object-cover" />
+      <div class="leading-tight">
+        <p class="font-extrabold text-lg tracking-tight">TasKiro</p>
+        <p class="text-[11px] text-slate-400 font-medium">Gerencie seu fluxo</p>
+      </div>
+      <button data-action="close-sidebar" class="ml-auto lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition" aria-label="Fechar menu">
+        <i data-lucide="x" class="h-5 w-5"></i>
+      </button>
+    </div>
+
+    <!-- Quick add -->
+    <div class="px-4 pt-4 shrink-0">
+      <button data-action="new-task"
+        class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 shadow-sm shadow-brand-600/30 transition active:scale-[.98]">
+        <i data-lucide="plus" class="h-4 w-4"></i> Nova tarefa
+      </button>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+      <div>
+        <p class="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Visões</p>
+        <ul class="space-y-1" id="nav-views"></ul>
+      </div>
+
+      <div>
+        <div class="px-3 mb-2 flex items-center justify-between">
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Projetos</p>
+          <button data-action="new-project" class="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-brand-600 transition" aria-label="Novo projeto" title="Novo projeto">
+            <i data-lucide="plus" class="h-4 w-4"></i>
+          </button>
+        </div>
+        <ul class="space-y-1" id="nav-projects"></ul>
+      </div>
+    </nav>
+
+    <!-- Footer user -->
+    <div class="p-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
+      <button data-action="toggle-theme"
+        class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition text-sm font-medium">
+        <i data-lucide="moon" class="h-4 w-4" data-theme-icon></i>
+        <span data-theme-label>Modo escuro</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Sidebar backdrop (mobile) -->
+  <div id="sidebar-backdrop" hidden class="fixed inset-0 z-30 bg-slate-900/50 backdrop-blur-sm lg:hidden" data-action="close-sidebar"></div>
+
+  <!-- ============================ MAIN ============================ -->
+  <div class="lg:pl-72 flex flex-col min-h-full">
+
+    <!-- Sticky header -->
+    <header class="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+      <div class="flex items-center gap-3 px-4 sm:px-6 h-16">
+        <button data-action="open-sidebar" class="lg:hidden p-2 -ml-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition" aria-label="Abrir menu">
+          <i data-lucide="menu" class="h-5 w-5"></i>
+        </button>
+
+        <div class="min-w-0">
+          <h1 id="view-title" class="text-lg sm:text-xl font-bold truncate">Todas as tarefas</h1>
+          <p id="view-subtitle" class="text-xs text-slate-400 truncate hidden sm:block">Seu painel completo</p>
+        </div>
+
+        <!-- Search -->
+        <div class="relative ml-auto hidden md:block">
+          <i data-lucide="search" class="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          <input id="search-input" type="text" placeholder="Buscar tarefas..."
+            class="w-56 lg:w-72 pl-9 pr-9 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition" />
+          <button data-action="clear-search" hidden class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition" aria-label="Limpar busca">
+            <i data-lucide="x" class="h-3.5 w-3.5"></i>
+          </button>
+        </div>
+
+        <!-- View toggle -->
+        <div class="hidden sm:flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+          <button data-action="set-layout" data-layout="board" class="layout-btn px-2.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Quadro">
+            <i data-lucide="columns-3" class="h-4 w-4"></i>
+          </button>
+          <button data-action="set-layout" data-layout="list" class="layout-btn px-2.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5" title="Lista">
+            <i data-lucide="list" class="h-4 w-4"></i>
+          </button>
+        </div>
+
+        <!-- Mobile search trigger -->
+        <button data-action="focus-search" class="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition" aria-label="Buscar">
+          <i data-lucide="search" class="h-5 w-5"></i>
+        </button>
+
+        <!-- New task -->
+        <button data-action="new-task" class="hidden sm:inline-flex items-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold px-3.5 py-2 text-sm shadow-sm shadow-brand-600/30 transition active:scale-[.98]">
+          <i data-lucide="plus" class="h-4 w-4"></i> <span class="hidden lg:inline">Nova tarefa</span>
+        </button>
+
+        <!-- User menu -->
+        <div class="relative">
+          <button data-action="toggle-menu" data-menu="user-menu" class="flex items-center gap-2 p-1 pr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition" aria-haspopup="true" aria-label="Menu do usuário">
+            <span class="h-8 w-8 rounded-full bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white grid place-items-center font-bold text-sm">AT</span>
+            <i data-lucide="chevron-down" class="h-4 w-4 text-slate-400 hidden sm:block"></i>
+          </button>
+          <div id="user-menu" hidden class="dropdown absolute right-0 mt-2 w-60 origin-top-right rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/10 p-1.5 animate-scale-in z-50">
+            <div class="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 mb-1">
+              <p class="font-semibold text-sm">Andres Atziack</p>
+              <p class="text-xs text-slate-400 truncate">andres@taskiro.app</p>
+            </div>
+            <button data-action="menu-profile" class="menu-item"><i data-lucide="user" class="h-4 w-4"></i> Meu perfil</button>
+            <button data-action="menu-settings" class="menu-item"><i data-lucide="settings" class="h-4 w-4"></i> Configurações</button>
+            <button data-action="toggle-theme" class="menu-item"><i data-lucide="moon" class="h-4 w-4" data-theme-icon></i> <span data-theme-label>Modo escuro</span></button>
+            <div class="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
+            <button data-action="menu-logout" class="menu-item text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"><i data-lucide="log-out" class="h-4 w-4"></i> Sair</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter / sort bar -->
+      <div class="flex items-center gap-2 px-4 sm:px-6 pb-3 overflow-x-auto">
+        <div class="flex items-center gap-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 shrink-0">
+          <button data-action="set-priority-filter" data-priority="all" class="prio-filter px-2.5 py-1 rounded-md text-xs font-semibold transition">Todas</button>
+          <button data-action="set-priority-filter" data-priority="high" class="prio-filter px-2.5 py-1 rounded-md text-xs font-semibold transition">Alta</button>
+          <button data-action="set-priority-filter" data-priority="medium" class="prio-filter px-2.5 py-1 rounded-md text-xs font-semibold transition">Média</button>
+          <button data-action="set-priority-filter" data-priority="low" class="prio-filter px-2.5 py-1 rounded-md text-xs font-semibold transition">Baixa</button>
+        </div>
+
+        <div class="relative shrink-0">
+          <button data-action="toggle-menu" data-menu="sort-menu" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <i data-lucide="arrow-up-down" class="h-3.5 w-3.5"></i> <span id="sort-label">Ordenar</span>
+          </button>
+          <div id="sort-menu" hidden class="dropdown absolute left-0 mt-2 w-48 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-1.5 animate-scale-in z-50">
+            <button data-action="set-sort" data-sort="manual" class="menu-item text-sm"><i data-lucide="move-vertical" class="h-4 w-4"></i> Manual</button>
+            <button data-action="set-sort" data-sort="due" class="menu-item text-sm"><i data-lucide="calendar" class="h-4 w-4"></i> Data de entrega</button>
+            <button data-action="set-sort" data-sort="priority" class="menu-item text-sm"><i data-lucide="flag" class="h-4 w-4"></i> Prioridade</button>
+            <button data-action="set-sort" data-sort="alpha" class="menu-item text-sm"><i data-lucide="arrow-down-a-z" class="h-4 w-4"></i> Alfabética</button>
+          </div>
+        </div>
+
+        <span class="text-xs text-slate-400 ml-auto shrink-0" id="task-count">0 tarefas</span>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="flex-1 p-4 sm:p-6">
+      <!-- Board view -->
+      <div id="board-view" class="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3"></div>
+
+      <!-- List view -->
+      <div id="list-view" hidden class="max-w-3xl mx-auto space-y-3"></div>
+
+      <!-- Empty state -->
+      <div id="empty-state" hidden class="flex flex-col items-center justify-center text-center py-24">
+        <div class="h-16 w-16 rounded-2xl bg-brand-50 dark:bg-brand-900/30 grid place-items-center mb-4">
+          <i data-lucide="clipboard-check" class="h-8 w-8 text-brand-500"></i>
+        </div>
+        <h3 class="font-bold text-lg">Nada por aqui</h3>
+        <p class="text-sm text-slate-400 max-w-xs mt-1">Nenhuma tarefa corresponde a esta visão. Crie uma nova e comece a organizar.</p>
+        <button data-action="new-task" class="mt-5 inline-flex items-center gap-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 text-sm transition">
+          <i data-lucide="plus" class="h-4 w-4"></i> Criar tarefa
+        </button>
+      </div>
+    </main>
+
+    <footer class="px-6 py-4 text-center text-xs text-slate-400 border-t border-slate-200 dark:border-slate-800">
+      TasKiro — protótipo de gerenciador de tarefas. Os dados ficam salvos neste navegador.
+    </footer>
+  </div>
+
+  <!-- ============================ TASK MODAL ============================ -->
+  <div id="task-modal" hidden class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-fade-in" data-action="close-modal"></div>
+    <div class="relative w-full sm:max-w-lg bg-white dark:bg-slate-900 sm:rounded-2xl rounded-t-2xl shadow-2xl border border-slate-200 dark:border-slate-800 animate-scale-in max-h-[92vh] flex flex-col">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+        <h2 id="modal-title" class="font-bold text-lg">Nova tarefa</h2>
+        <button data-action="close-modal" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition" aria-label="Fechar">
+          <i data-lucide="x" class="h-5 w-5"></i>
+        </button>
+      </div>
+
+      <form id="task-form" class="overflow-y-auto px-5 py-4 space-y-4">
+        <input type="hidden" id="task-id" />
+        <div>
+          <label class="block text-sm font-semibold mb-1.5">Título</label>
+          <input id="f-title" type="text" required maxlength="120" placeholder="O que precisa ser feito?"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold mb-1.5">Descrição</label>
+          <textarea id="f-desc" rows="3" placeholder="Adicione detalhes (opcional)"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition resize-none"></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-semibold mb-1.5">Status</label>
+            <select id="f-status" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition">
+              <option value="todo">A fazer</option>
+              <option value="doing">Em andamento</option>
+              <option value="done">Concluída</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1.5">Prioridade</label>
+            <select id="f-priority" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition">
+              <option value="low">Baixa</option>
+              <option value="medium" selected>Média</option>
+              <option value="high">Alta</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1.5">Projeto</label>
+            <select id="f-project" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition"></select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1.5">Data de entrega</label>
+            <input id="f-due" type="date" class="w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold mb-1.5">Etiquetas</label>
+          <input id="f-tags" type="text" placeholder="design, urgente, reunião (separe por vírgula)"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition" />
+        </div>
+      </form>
+
+      <div class="flex items-center gap-2 px-5 py-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
+        <button id="modal-delete-btn" data-action="delete-from-modal" hidden class="mr-auto inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition">
+          <i data-lucide="trash-2" class="h-4 w-4"></i> Excluir
+        </button>
+        <button data-action="close-modal" class="rounded-xl px-4 py-2 text-sm font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Cancelar</button>
+        <button data-action="save-task" class="rounded-xl px-4 py-2 text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white transition active:scale-[.98]">Salvar tarefa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ PROJECT MODAL ============================ -->
+  <div id="project-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-fade-in" data-action="close-modal"></div>
+    <div class="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 animate-scale-in">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+        <h2 class="font-bold text-lg">Novo projeto</h2>
+        <button data-action="close-modal" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition" aria-label="Fechar">
+          <i data-lucide="x" class="h-5 w-5"></i>
+        </button>
+      </div>
+      <form id="project-form" class="px-5 py-4 space-y-4">
+        <div>
+          <label class="block text-sm font-semibold mb-1.5">Nome do projeto</label>
+          <input id="p-name" type="text" required maxlength="40" placeholder="Ex.: Marketing"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-transparent focus:border-brand-400 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/20 outline-none text-sm transition" />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold mb-2">Cor</label>
+          <div id="p-colors" class="flex flex-wrap gap-2"></div>
+        </div>
+      </form>
+      <div class="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-200 dark:border-slate-800">
+        <button data-action="close-modal" class="rounded-xl px-4 py-2 text-sm font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Cancelar</button>
+        <button data-action="save-project" class="rounded-xl px-4 py-2 text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white transition">Criar projeto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ CONFIRM MODAL ============================ -->
+  <div id="confirm-modal" hidden class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-fade-in" data-action="close-confirm"></div>
+    <div class="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 animate-scale-in p-6 text-center">
+      <div class="mx-auto h-12 w-12 rounded-full bg-rose-100 dark:bg-rose-950/50 grid place-items-center mb-4">
+        <i data-lucide="alert-triangle" class="h-6 w-6 text-rose-600"></i>
+      </div>
+      <h3 id="confirm-title" class="font-bold text-lg">Tem certeza?</h3>
+      <p id="confirm-text" class="text-sm text-slate-400 mt-1.5">Esta ação não pode ser desfeita.</p>
+      <div class="flex gap-2 mt-6">
+        <button data-action="close-confirm" class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Cancelar</button>
+        <button id="confirm-ok" class="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white transition">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ CARD CONTEXT MENU ============================ -->
+  <div id="card-menu" hidden class="dropdown fixed w-44 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-1.5 animate-scale-in z-[55]">
+    <button data-action="card-edit" class="menu-item text-sm"><i data-lucide="pencil" class="h-4 w-4"></i> Editar</button>
+    <button data-action="card-duplicate" class="menu-item text-sm"><i data-lucide="copy" class="h-4 w-4"></i> Duplicar</button>
+    <button data-action="card-toggle-done" class="menu-item text-sm"><i data-lucide="check-circle-2" class="h-4 w-4"></i> Marcar concluída</button>
+    <div class="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
+    <button data-action="card-delete" class="menu-item text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"><i data-lucide="trash-2" class="h-4 w-4"></i> Excluir</button>
+  </div>
+
+  <!-- ============================ TOASTS ============================ -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-[70] flex flex-col gap-2 items-end pointer-events-none"></div>
+
+  <!-- Component classes -->
+  <style type="text/tailwindcss">
+    @layer components {
+      .menu-item { @apply w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition text-left; }
+      .nav-item { @apply w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer; }
+      .nav-item.active { @apply bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300; }
+    }
+  </style>
+
+  <script src="app.js"></script>
+</body>
+</html>
